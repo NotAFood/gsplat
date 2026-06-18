@@ -28,7 +28,36 @@ exec(open("gsplat/version.py", "r").read())
 
 URL = "https://github.com/nerfstudio-project/gsplat"
 
-BUILD_NO_CUDA = os.getenv("BUILD_NO_CUDA", "0") == "1"
+def _nvcc_major_matches_torch():
+    """Return True if system nvcc major version matches torch's CUDA major version."""
+    import subprocess
+    try:
+        import torch
+        from torch.utils.cpp_extension import CUDA_HOME
+        if CUDA_HOME is None:
+            return False
+        raw = subprocess.check_output(
+            [CUDA_HOME + "/bin/nvcc", "-V"], universal_newlines=True
+        )
+        tok = raw.split()
+        nvcc_major = int(tok[tok.index("release") + 1].split(".")[0])
+        torch_cuda = torch.version.cuda
+        if torch_cuda is None:
+            return False
+        return nvcc_major == int(torch_cuda.split(".")[0])
+    except Exception:
+        return False
+
+_explicit_no_cuda = os.getenv("BUILD_NO_CUDA", "0") == "1"
+if not _explicit_no_cuda and not _nvcc_major_matches_torch():
+    import warnings
+    warnings.warn(
+        "System nvcc major version does not match torch's CUDA version. "
+        "Building gsplat without CUDA extensions (BUILD_NO_CUDA=1 implicitly set). "
+        "Set BUILD_NO_CUDA=0 to override."
+    )
+    _explicit_no_cuda = True
+BUILD_NO_CUDA = _explicit_no_cuda
 
 
 def get_ext():
